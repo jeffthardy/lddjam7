@@ -9,6 +9,7 @@ namespace LDDJAM7
     {
         public float maxMoveSpeed = 10;
         public float maxSpinSpeed = 10;
+        public float maxFallSpeed = 10;
 
         public float moveSpeed = 1000;
         public float jumpHeight = 10;
@@ -32,7 +33,7 @@ namespace LDDJAM7
         private int totalBackwardRotationCount;
 
         // This might change depending on space
-        private float maxFallSpeed = 2;
+        private float speedScaleFactor = 1;
 
         // Start is called before the first frame update
         void Start()
@@ -92,12 +93,12 @@ namespace LDDJAM7
             var yd = v.y;
             v.y = 0f;
             v = Vector3.ClampMagnitude(v, maxMoveSpeed);
-            v.y = Vector3.ClampMagnitude(new Vector3(0, yd, 0), maxFallSpeed).y;
+            v.y = Vector3.ClampMagnitude(new Vector3(0, yd, 0), maxFallSpeed* speedScaleFactor).y;
             rb.velocity = v;
 
 
             var va = rb.angularVelocity;
-            va = Vector3.ClampMagnitude(va, maxSpinSpeed);
+            va = Vector3.ClampMagnitude(va, maxSpinSpeed * speedScaleFactor);
             rb.angularVelocity = va;
 
 
@@ -187,9 +188,10 @@ namespace LDDJAM7
             //Debug.Log("Jump!");
         }
 
-        public void SetFallSpeed(float speed)
+        public void SetFallSpeedScale(float speed)
         {
-            maxFallSpeed = speed;
+            speedScaleFactor = speed;
+            Debug.Log("New speed scale factor is " +  speed);
         }
 
         void OnCollisionStay(Collision collisionInfo)

@@ -6,7 +6,7 @@ namespace LDDJAM7
 {
     public class FallRegion : MonoBehaviour
     {
-        public float fallSpeed = 10.0f;
+        public float speedScaleFactor = 1.0f;
 
         public GameObject gameObjects;
         public float objectsPerMeter = 1.0f;
@@ -39,7 +39,8 @@ namespace LDDJAM7
             // Disable player movement and show dialog
             if (other.transform.tag == "Player")
             {
-                other.transform.GetComponent<PlayerController>().SetFallSpeed(fallSpeed);
+                Debug.Log(this + " is setting new speed scale of " + speedScaleFactor);
+                other.transform.GetComponent<PlayerController>().SetFallSpeedScale(speedScaleFactor);
                 // Clear freeze X rotation
                 other.transform.GetComponent<Rigidbody>().constraints = other.transform.GetComponent<Rigidbody>().constraints & (~RigidbodyConstraints.FreezeRotationX) ;
             }

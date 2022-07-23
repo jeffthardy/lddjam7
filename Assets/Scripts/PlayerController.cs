@@ -2,6 +2,9 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.InputSystem;
+using UnityEngine.SceneManagement;
+using UnityEngine.UI;
+using TMPro;
 
 namespace LDDJAM7
 {
@@ -15,7 +18,11 @@ namespace LDDJAM7
         public float jumpHeight = 10;
         public float rotateSpeed = 10;
         public float spinSpeed = 1000;
+        public float oxygenCapacity = 5.0f;
         public GameObject humanoidChild;
+        public Slider oxygenSlider;
+        public ScoreKeeper scoreKeeper;
+        public TextMeshProUGUI depthValueText;
 
 
         private bool jumpPending;
@@ -34,6 +41,9 @@ namespace LDDJAM7
 
         // This might change depending on space
         private float speedScaleFactor = 1;
+        private bool areaHasOxygen = true;
+        private float currentOxygenLevel;
+        private float comboStartTime;
 
         // Start is called before the first frame update
         void Start()
@@ -49,11 +59,34 @@ namespace LDDJAM7
             lastDirection = transform.TransformDirection(Vector3.forward);
             totalForwardRotationCount = 0;
             totalBackwardRotationCount = 0;
+            oxygenSlider.maxValue = oxygenCapacity;
+            oxygenSlider.value = oxygenCapacity;
+            comboStartTime = Time.time;
         }
 
         // Update is called once per frame
         void Update()
         {
+            // Display Depth
+            depthValueText.text = (int)(transform.position.y) + "m";
+
+            // Check if we are out of Oxygen
+            if (!areaHasOxygen)
+            {
+                currentOxygenLevel -= Time.deltaTime;
+                oxygenSlider.value = currentOxygenLevel;
+                if (currentOxygenLevel < 0)
+                {
+                    Debug.Log("You have died! Oxygen is " + currentOxygenLevel);
+                    scoreKeeper.SaveFinalScore();
+                    SceneManager.LoadScene("Dive");
+
+                }
+                //else
+                //    Debug.Log("currentOxygenLevel : " + currentOxygenLevel);
+            }
+
+
             // Mostly fixed direction 
             Vector3 moveVector = (new Vector3(0, 0, 1) * -direction.x * (moveSpeed * Time.deltaTime));
             //rb.MovePosition(transform.position + moveVector);
@@ -188,21 +221,66 @@ namespace LDDJAM7
             //Debug.Log("Jump!");
         }
 
+        public void SetOxygenPresence(bool oxygenStatus)
+        {
+            if (areaHasOxygen && !oxygenStatus)
+                currentOxygenLevel = oxygenCapacity;
+            areaHasOxygen = oxygenStatus;
+        }
+
         public void SetFallSpeedScale(float speed)
         {
             speedScaleFactor = speed;
             Debug.Log("New speed scale factor is " +  speed);
         }
 
+        void OnTriggerEnter(Collider other)
+        {
+            if (other.transform.tag == "Oxygen")
+            {
+                currentOxygenLevel += 1;
+                if (currentOxygenLevel > oxygenCapacity)
+                    currentOxygenLevel = oxygenCapacity;
+
+                Destroy(other.transform.gameObject);
+            }
+        }
+
         void OnCollisionStay(Collision collisionInfo)
         {
-            isGrounded = true;
-            humanoidMeshAnimator.SetBool("IsGrounded", isGrounded);
+            if (collisionInfo.gameObject.tag == "Ground")
+            {
+                isGrounded = true;
+                humanoidMeshAnimator.SetBool("IsGrounded", isGrounded);
+                EndCombo();
+            }
         }
         void OnCollisionExit(Collision collisionInfo)
         {
-            isGrounded = false;
-            humanoidMeshAnimator.SetBool("IsGrounded", isGrounded);
+            if (collisionInfo.gameObject.tag == "Ground")
+            {
+                isGrounded = false;
+                humanoidMeshAnimator.SetBool("IsGrounded", isGrounded);
+                comboStartTime = Time.time;
+            }
+        }
+
+
+        void EndCombo()
+        {
+            // Don't try to score instant combos
+            if(Time.time - comboStartTime > 0.1f) 
+                scoreKeeper.EndCombo(totalForwardRotationCount, totalBackwardRotationCount,Time.time - comboStartTime);
+
+            //Reset Combo
+            totalForwardRotationCount = 0;
+            totalBackwardRotationCount = 0;
+            comboStartTime = Time.time;
+        }
+
+        public void ExitDive()
+        {
+            SceneManager.LoadScene("Title");
         }
     }
 }

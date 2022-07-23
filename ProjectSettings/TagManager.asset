@@ -5,6 +5,8 @@ TagManager:
   serializedVersion: 2
   tags:
   - FallRegion
+  - Oxygen
+  - Ground
   layers:
   - Default
   - TransparentFX

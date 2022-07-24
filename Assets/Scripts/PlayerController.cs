@@ -24,6 +24,7 @@ namespace LDDJAM7
         public Slider sicknessSlider;
         public ScoreKeeper scoreKeeper;
         public TextMeshProUGUI depthValueText;
+        public TextMeshProUGUI multiplierText;
 
 
         public AudioClip startClip;
@@ -59,6 +60,7 @@ namespace LDDJAM7
         private float comboStartTime;
 
         private bool hasPuked;
+        private int currentMultiplier;
 
 
         private bool playerEnabled;
@@ -83,6 +85,8 @@ namespace LDDJAM7
             oxygenSlider.value = oxygenCapacity;
             sicknessSlider.value = 0;
             comboStartTime = Time.time;
+            currentMultiplier = 1;
+            multiplierText.text = "1X";
 
             playerEnabled = true;
             hasPuked = false;
@@ -135,12 +139,17 @@ namespace LDDJAM7
 
                 if (!isGrounded)
                 {
-                    if ((rotation != 0.0f))
-                        rb.AddTorque(transform.right * rotateSpeed * -rotation);
-                    if (forwardSpin != 0)
-                        rb.AddTorque(transform.right * spinSpeed * forwardSpin);
-                    if (backwardSpin != 0)
-                        rb.AddTorque(transform.right * -spinSpeed * backwardSpin);
+                    if ((forwardSpin != 0) || (backwardSpin != 0))
+                    {
+                        rb.AddTorque(transform.right * spinSpeed * forwardSpin * Time.deltaTime);
+                        rb.AddTorque(transform.right * -spinSpeed * backwardSpin * Time.deltaTime);
+                    }
+                    else
+                    {
+                        if ((rotation != 0.0f))
+                            rb.AddTorque(transform.right * rotateSpeed * -rotation * Time.deltaTime);
+
+                    }
                 }
 
                 if (moveVector != new Vector3(0, 0, 0))
@@ -170,6 +179,7 @@ namespace LDDJAM7
 
 
                 CountRotations();
+                CalculateMultiplier();
             }
             else
             {
@@ -178,6 +188,23 @@ namespace LDDJAM7
             }
         }
 
+        private void CalculateMultiplier()
+        {
+
+            currentMultiplier = 0;
+            if (totalForwardRotationCount > 0)
+                currentMultiplier++;
+            if (totalBackwardRotationCount > 0)
+                currentMultiplier++;
+            if (Time.time > comboStartTime +10)
+                currentMultiplier++;
+            if (hasPuked)
+                currentMultiplier++;
+
+            if (currentMultiplier == 0)
+                currentMultiplier = 1;
+            multiplierText.text = currentMultiplier +  "X";
+        }
 
         private void CountRotations()
         {
@@ -252,7 +279,7 @@ namespace LDDJAM7
         }
         public void Rotate(InputAction.CallbackContext context)
         {
-            rotation = context.ReadValue<float>();
+            rotation = Mathf.Clamp(context.ReadValue<float>(), -1, 1);
             //Debug.Log("rotation " + rotation);
         }
         public void ForwardSpin(InputAction.CallbackContext context)

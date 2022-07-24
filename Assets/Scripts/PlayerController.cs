@@ -21,8 +21,18 @@ namespace LDDJAM7
         public float oxygenCapacity = 5.0f;
         public GameObject humanoidChild;
         public Slider oxygenSlider;
+        public Slider sicknessSlider;
         public ScoreKeeper scoreKeeper;
         public TextMeshProUGUI depthValueText;
+
+
+        public AudioClip startClip;
+        public AudioClip stopClip;
+        public AudioClip ughClip;
+        public AudioClip woohooClip;
+        public AudioClip weeClip;
+        public AudioClip slurpClip;
+        public AudioClip pukeClip;
 
 
         private bool jumpPending;
@@ -39,11 +49,19 @@ namespace LDDJAM7
         private int totalForwardRotationCount;
         private int totalBackwardRotationCount;
 
+        private ParticleSystem pukeSystem;
+        private AudioSource audioSource;
+
         // This might change depending on space
         private float speedScaleFactor = 1;
         private bool areaHasOxygen = true;
         private float currentOxygenLevel;
         private float comboStartTime;
+
+        private bool hasPuked;
+
+
+        private bool playerEnabled;
 
         // Start is called before the first frame update
         void Start()
@@ -55,88 +73,109 @@ namespace LDDJAM7
             forwardSpin = 0.0f;
             backwardSpin = 0.0f;
 
+            pukeSystem = GetComponentInChildren<ParticleSystem>();
+            audioSource = GetComponent<AudioSource>();
 
             lastDirection = transform.TransformDirection(Vector3.forward);
             totalForwardRotationCount = 0;
             totalBackwardRotationCount = 0;
             oxygenSlider.maxValue = oxygenCapacity;
             oxygenSlider.value = oxygenCapacity;
+            sicknessSlider.value = 0;
             comboStartTime = Time.time;
+
+            playerEnabled = true;
+            hasPuked = false;
+
+
+            StartCoroutine(PlayClipAfter(startClip,1.0f));
         }
+
+
+
 
         // Update is called once per frame
         void Update()
         {
-            // Display Depth
-            depthValueText.text = (int)(transform.position.y) + "m";
-
-            // Check if we are out of Oxygen
-            if (!areaHasOxygen)
+            if (playerEnabled)
             {
-                currentOxygenLevel -= Time.deltaTime;
-                oxygenSlider.value = currentOxygenLevel;
-                if (currentOxygenLevel < 0)
+                // Display Depth
+                depthValueText.text = (int)(transform.position.y) + "m";
+
+                // Check if we are out of Oxygen
+                if (!areaHasOxygen)
                 {
-                    Debug.Log("You have died! Oxygen is " + currentOxygenLevel);
-                    scoreKeeper.SaveFinalScore();
-                    SceneManager.LoadScene("Dive");
+                    currentOxygenLevel -= Time.deltaTime;
+                    oxygenSlider.value = currentOxygenLevel;
+                    if (currentOxygenLevel < 0)
+                    {
+                        Debug.Log("You have died! Oxygen is " + currentOxygenLevel);
+                        scoreKeeper.SaveFinalScore((int)(transform.position.y));
+                        playerEnabled = false;
+                        StartCoroutine(PlayClipAfter(stopClip, 0f));
 
+                    }
+                    //else
+                    //    Debug.Log("currentOxygenLevel : " + currentOxygenLevel);
                 }
-                //else
-                //    Debug.Log("currentOxygenLevel : " + currentOxygenLevel);
-            }
 
 
-            // Mostly fixed direction 
-            Vector3 moveVector = (new Vector3(0, 0, 1) * -direction.x * (moveSpeed * Time.deltaTime));
-            //rb.MovePosition(transform.position + moveVector);
+                // Mostly fixed direction 
+                Vector3 moveVector = (new Vector3(0, 0, 1) * -direction.x * (moveSpeed * Time.deltaTime));
+                //rb.MovePosition(transform.position + moveVector);
 
-            rb.AddForce(moveVector, ForceMode.Acceleration);
+                rb.AddForce(moveVector, ForceMode.Acceleration);
 
 
-            if (isGrounded && jumpPending)
-            {
-                rb.AddForce(transform.up * Mathf.Sqrt(jumpHeight * -2f * Physics.gravity.y), ForceMode.VelocityChange);
-                jumpPending = false;
-            }
+                if (isGrounded && jumpPending)
+                {
+                    rb.AddForce(transform.up * Mathf.Sqrt(jumpHeight * -2f * Physics.gravity.y), ForceMode.VelocityChange);
+                    jumpPending = false;
+                }
 
-            if (!isGrounded)
-            {
-                if((rotation != 0.0f))
-                    rb.AddTorque(transform.right * rotateSpeed * -rotation);
-                if(forwardSpin != 0)
-                    rb.AddTorque(transform.right * spinSpeed* forwardSpin);
-                if (backwardSpin != 0)
-                    rb.AddTorque(transform.right * -spinSpeed * backwardSpin);
-            }
+                if (!isGrounded)
+                {
+                    if ((rotation != 0.0f))
+                        rb.AddTorque(transform.right * rotateSpeed * -rotation);
+                    if (forwardSpin != 0)
+                        rb.AddTorque(transform.right * spinSpeed * forwardSpin);
+                    if (backwardSpin != 0)
+                        rb.AddTorque(transform.right * -spinSpeed * backwardSpin);
+                }
 
-            if (moveVector != new Vector3(0, 0, 0))
-            {
-                //Debug.Log("Moving by " + moveVector);
-                humanoidMeshAnimator.SetBool("IsMoving", true);
+                if (moveVector != new Vector3(0, 0, 0))
+                {
+                    //Debug.Log("Moving by " + moveVector);
+                    humanoidMeshAnimator.SetBool("IsMoving", true);
+                }
+                else
+                {
+                    humanoidMeshAnimator.SetBool("IsMoving", false);
+                }
+
+
+                // Clamp max speeds except on falling axis
+                var v = rb.velocity;
+                var yd = v.y;
+                v.y = 0f;
+                v = Vector3.ClampMagnitude(v, maxMoveSpeed);
+                v.y = Vector3.ClampMagnitude(new Vector3(0, yd, 0), maxFallSpeed * speedScaleFactor).y;
+                rb.velocity = v;
+
+
+                var va = rb.angularVelocity;
+                va = Vector3.ClampMagnitude(va, maxSpinSpeed * speedScaleFactor);
+                rb.angularVelocity = va;
+
+
+
+                CountRotations();
             }
             else
             {
-                humanoidMeshAnimator.SetBool("IsMoving", false);
+                // Play should be stopped now.
+                rb.isKinematic = true;
             }
-
-
-            // Clamp max speeds except on falling axis
-            var v = rb.velocity;
-            var yd = v.y;
-            v.y = 0f;
-            v = Vector3.ClampMagnitude(v, maxMoveSpeed);
-            v.y = Vector3.ClampMagnitude(new Vector3(0, yd, 0), maxFallSpeed* speedScaleFactor).y;
-            rb.velocity = v;
-
-
-            var va = rb.angularVelocity;
-            va = Vector3.ClampMagnitude(va, maxSpinSpeed * speedScaleFactor);
-            rb.angularVelocity = va;
-
-
-
-            CountRotations();
         }
 
 
@@ -181,14 +220,25 @@ namespace LDDJAM7
                 {
                     totalForwardRotationAngle -= 360;
                     totalForwardRotationCount++;
-                    //Debug.Log("totalForwardRotationCount: " + totalForwardRotationCount);
+                    audioSource.PlayOneShot(weeClip);
                 }
 
                 while (totalBackwardRotationAngle > 360)
                 {
                     totalBackwardRotationAngle -= 360;
                     totalBackwardRotationCount++;
+                    audioSource.PlayOneShot(weeClip);
+
+
                     //Debug.Log("totalBackwardRotationCount: " + totalBackwardRotationCount);
+                }
+
+                var spinDiff = Mathf.Abs(totalBackwardRotationCount - totalForwardRotationCount);
+                sicknessSlider.value = spinDiff;
+                if (sicknessSlider.value == sicknessSlider.maxValue)
+                {
+                    if(!hasPuked)
+                        triggerPuke();
                 }
             }
         }
@@ -218,6 +268,8 @@ namespace LDDJAM7
         public void Jump(InputAction.CallbackContext context)
         {
             jumpPending = true;
+            if(isGrounded)
+                audioSource.PlayOneShot(woohooClip);
             //Debug.Log("Jump!");
         }
 
@@ -231,7 +283,7 @@ namespace LDDJAM7
         public void SetFallSpeedScale(float speed)
         {
             speedScaleFactor = speed;
-            Debug.Log("New speed scale factor is " +  speed);
+            Debug.Log("New speed scale factor is " + speed);
         }
 
         void OnTriggerEnter(Collider other)
@@ -239,6 +291,7 @@ namespace LDDJAM7
             if (other.transform.tag == "Oxygen")
             {
                 currentOxygenLevel += 1;
+                audioSource.PlayOneShot(slurpClip);
                 if (currentOxygenLevel > oxygenCapacity)
                     currentOxygenLevel = oxygenCapacity;
 
@@ -250,6 +303,9 @@ namespace LDDJAM7
         {
             if (collisionInfo.gameObject.tag == "Ground")
             {
+                if (isGrounded == false)
+                    audioSource.PlayOneShot(ughClip);
+
                 isGrounded = true;
                 humanoidMeshAnimator.SetBool("IsGrounded", isGrounded);
                 EndCombo();
@@ -269,18 +325,53 @@ namespace LDDJAM7
         void EndCombo()
         {
             // Don't try to score instant combos
-            if(Time.time - comboStartTime > 0.1f) 
-                scoreKeeper.EndCombo(totalForwardRotationCount, totalBackwardRotationCount,Time.time - comboStartTime);
+            if (Time.time - comboStartTime > 0.1f)
+                scoreKeeper.EndCombo(totalForwardRotationCount, totalBackwardRotationCount, Time.time - comboStartTime, hasPuked);
 
             //Reset Combo
             totalForwardRotationCount = 0;
             totalBackwardRotationCount = 0;
             comboStartTime = Time.time;
+            hasPuked = false;
         }
 
         public void ExitDive()
         {
             SceneManager.LoadScene("Title");
         }
+
+        IEnumerator ReloadScene(int secs)
+        {
+            yield return new WaitForSeconds(secs);
+            SceneManager.LoadScene("Dive");
+        }
+
+
+        IEnumerator PlayClipAfter(AudioClip clip, float secs)
+        {
+            yield return new WaitForSeconds(secs);
+            audioSource.PlayOneShot(clip);
+        }
+
+
+        void triggerPuke()
+        {
+            Debug.Log("Triggering Sickness");
+            hasPuked = true;
+            audioSource.PlayOneShot(pukeClip);
+            StartCoroutine(PukeForXSeconds(0.5f));
+        }
+        IEnumerator PukeForXSeconds(float secs)
+        {
+            pukeSystem.Play();
+            while (sicknessSlider.value > 0)
+            {
+                yield return new WaitForSeconds(secs);
+                sicknessSlider.value--;
+            }
+            pukeSystem.Stop();
+        }
+    
+
     }
 }
